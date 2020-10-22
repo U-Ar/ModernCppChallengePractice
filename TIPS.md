@@ -633,11 +633,29 @@ int main(){
 * 本ではsqlite_modern_cppライブラリを利用していた(sqlite_modern_cpp.hをインクルードするのみで使用可能)
     * sqlite::databaseクラスは演算子<<と>>を持つ
         * <<で命令文を入力する 文内に?を入れておけばその後の<<で?にパラメータ入力可能
-        * \>>で引数としてデータを取って処理を実行するラムダ式に入力する
+        * \>>で引数としてデータを取って処理を実行するラムダ式に入力する  
 
 ## 問題86 SQLiteデータベースにトランザクション挿入
 * 空白を含む文字列の入力にはgetlineを使う
     * 自作splitも活用
+* BEGIN命令でトランザクションを開始、COMMIT命令で完了する 完了前にエラーが発生するとBEGIN以降の変更は反映されない
+
+## 問題87 SQLiteデータベースにメディアファイルのバイナリ追加
+* バイナリデータの扱い方
+    * ファイルから取り込み
+    ```c++
+    std::vector<char> data;
+    std::ifstream ifile(filepath, std::ios::binary  std::ios::ate); //入力ストリームを終端から開始
+    if (ifile.is_open())
+    {
+        auto size = ifile.tellg(); //ファイルサイズ
+        ifile.seekg(0, std::ios::beg); //ストリームを最初に戻す
+
+        data.resize(static_cast<size_t>(size)); //バッファサイズを合わせる
+        ifile.read(data.data(),size); //vector<char>に読む
+    }
+    return data;
+    ```
 
 ## 問題88 シーザー暗号
 * 各文字の一定距離シフトによる単純な暗号

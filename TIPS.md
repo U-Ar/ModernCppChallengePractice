@@ -781,6 +781,3 @@ function doGet(e) {
 
 ## 問題100 画像内にある顔を検出する
 * opencvを利用(cascadeclassifier)顔認識に必要なxmlファイルはopencv-masterに付属したもの
-
-## 写経リスト
-* システムハンドルラッパー

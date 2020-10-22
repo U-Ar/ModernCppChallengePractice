@@ -1,0 +1,3 @@
+# ModernCppChallengePractice
+This repository was created for recording my exercises of the problems on a book "Modern C++ Challenge." and practicing using GitHub. Source codes are named "pr(_).cpp", where (_) indicates the number of the problem. Also there are source codes named "pr(_)_ans.cpp", in which I copied the answers on the book. In TIPS.md you can see what I learned through these exercises, but note that it is written in Japanese.
+Some codes assume the existence of external libraries, and I didn't attach them with this repository. So some codes may not work as intended depending on the environments.  

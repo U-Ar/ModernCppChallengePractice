@@ -1,0 +1,237 @@
+#include<bitset>
+#include<cassert>
+#include<chrono>
+#include<cmath>
+#include<cstddef>
+#include<cstdlib>
+#include<ctime>
+#include<cctype>
+#include<filesystem>
+#include<fstream>
+#include<functional>
+#include<iomanip>
+#include<ios>
+#include<iostream>
+#include<iterator>
+#include<locale>
+#include<map>
+#include<mutex>
+#include<numeric>
+#include<optional>
+#include<random>
+#include<set>
+#include<sstream>
+#include<string>
+#include<string_view>
+#include<thread>
+#include<type_traits>
+#include<utility>
+#include<vector>
+
+
+#include <sqlite3.h>
+#include "sqlite_modern_cpp/sqlite_modern_cpp.h"
+
+struct casting_role
+{
+    std::string actor;
+    std::string role;
+};
+
+struct movie
+{
+    unsigned int id;
+    std::string title;
+    int year;
+    unsigned int length;
+    std::vector<casting_role> cast;
+    std::vector<std::string> directors;
+    std::vector<std::string> writers;
+
+    std::istream& info(std::istream& is) {
+        int nc, nd, nw;
+        is >> id >> title >> year >> length;
+
+        is >> nc;
+        for (int i = 0; i < nc; ++i) {
+            std::string tmp1, tmp2;
+            is >> tmp1 >> tmp2;
+            cast.emplace_back(casting_role{tmp1,tmp2});
+        }
+        is >> nd;
+        for (int i = 0; i < nd; ++i) {
+            std::string tmp;
+            is >> tmp;
+            directors.push_back(tmp);
+        }
+        is >> nw;
+        for (int i = 0; i < nw; ++i) {
+            std::string tmp;
+            is >> tmp;
+            writers.push_back(tmp);
+        }
+        return is;
+    }
+};
+using movie_list = std::vector<movie>;
+
+void add_movie(movie const& m, sqlite::database& db)
+{
+    
+    sqlite3_int64 rowid, personid;
+    db << R"(select max(rowid) from movies;)"
+       >> [&rowid](sqlite3_int64 const i) { rowid = i + 1; };
+    db << R"(select max(rowid) from persons;)"
+       >> [&personid](sqlite3_int64 const i) { personid = i + 1; };
+
+    try {
+        db << R"(begin transaction;)";
+        db << R"(insert into movies values (?, ?, ?);)"
+        << m.title << m.year << m.length;
+        
+        for (auto const& c : m.cast)
+        {
+            db << R"(insert into casting values (?, ?, ?);)"
+            << rowid << personid++ << c.role;
+            db << R"(insert into persons values (?);)"
+            << c.actor;
+        }
+        for (auto const& d : m.directors)
+        {
+            db << "insert into directors values (?, ?);"
+            << rowid << personid++;
+            db << "insert into persons values (?);"
+            << d;
+        }
+        for (auto const& w : m.writers)
+        {
+            db << "insert into writers values (?, ?);"
+            << rowid << personid++;
+            db << "insert into persons values (?);"
+            << w;
+        }
+        db << "commit transaction;";
+    }
+    catch (std::exception const&)
+    {
+        db << "rollback";
+    }
+}
+
+
+std::vector<std::string> get_directors(sqlite3_int64 const movie_id,
+                                       sqlite::database & db)
+{
+    std::vector<std::string> result;
+    db << R"(select p.name from directors as w
+          join persons as p on w.personid = p.rowid
+          where w.movieid = ?;)"
+       << movie_id 
+       >> [& result] (std::string const name)
+       {
+           result.emplace_back(name);
+       };
+    return result;
+}
+
+std::vector<std::string> get_writers(sqlite3_int64 const movie_id,
+                                     sqlite::database & db)
+{
+    std::vector<std::string> result;
+    db << R"(select p.name from writers as w
+          join persons as p on w.personid = p.rowid
+          where w.movieid = ?;)"
+       << movie_id 
+       >> [& result] (std::string const name)
+       {
+           result.emplace_back(name);
+       };
+    return result;
+}            
+
+std::vector<casting_role> get_cast(sqlite3_int64 const movie_id,
+                                   sqlite::database& db)
+{
+    std::vector<casting_role> result;
+    db  << R"(select p.name, c.role from casting as c
+           join persons as p on c.personid = p.rowid
+           where c.movieid = ?;)"
+        << movie_id 
+        >> [& result] (std::string const name, std::string const role)
+        {
+            result.emplace_back(casting_role{name,role});
+        };
+    return result;
+}
+
+movie_list get_movies(sqlite::database& db)
+{
+    movie_list movies;
+
+    db  << R"(select rowid, * from movies;)"
+        >> [&movies, &db] (sqlite3_int64 const rowid,
+                          std::string const title,
+                          sqlite3_int64 const year,
+                          sqlite3_int64 const length)
+        {
+            movies.emplace_back(
+                movie{
+                    static_cast<unsigned>(rowid),
+                    title,
+                    year,
+                    static_cast<unsigned>(length),
+                    get_cast(rowid,db),
+                    get_directors(rowid,db),
+                    get_writers(rowid,db)
+                }
+            );
+        };
+    return movies;
+}
+
+void print_movie(movie const& m)
+{
+    std::cout << "[" << m.id << "]\n";
+    std::cout << " title    : " << m.title << std::endl;
+    std::cout << " year     : " << m.year << std::endl;
+    std::cout << " length   : " << m.length << std::endl;
+    std::cout << " cast     : " << std::endl;
+    for (auto const& c : m.cast)
+        std::cout << "    role: " << c.role << " name: " << c.actor << std::endl;
+    std::cout << " directors: " << std::endl;
+    for (auto const& s : m.directors)
+        std::cout << "    " << s << std::endl;
+    std::cout << " writers  : " << std::endl;
+    for (auto const& s : m.writers)
+        std::cout << "    " << s << std::endl;
+}
+
+
+
+int main() 
+{
+    try
+    {
+        sqlite::database db("pr85.db");
+
+        std::cout << "input datum of a movie:" << std::endl;
+        movie tmp;
+        tmp.info(std::cin);
+        add_movie(tmp,db);
+        
+        auto const movies = get_movies(db);
+        for (auto const& m : movies)
+        {
+            print_movie(m);
+        }
+    }
+    catch (sqlite::sqlite_exception const& e)
+    {
+        std::cerr << e.get_code() << ": " << e.what() << " during "
+                  << e.get_sql() << std::endl;
+    }
+    catch (std::exception const& e)
+    {
+        std::cerr << e.what() << std::endl;
+    }
+}
